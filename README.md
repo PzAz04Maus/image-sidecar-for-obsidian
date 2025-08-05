@@ -1,0 +1,1 @@
+# image-sidecar-for-obsidian
