@@ -20,12 +20,14 @@ export default class ImageSidecarPlugin extends Plugin {
         if (!exists) {
             
           const content = `---
-image: ${file.name}
-creator: 
+Image: ${file.name}
+Creator: 
+Source: 
 License: 
-Permissions:
-tags: []
-description: 
+Permissions: 
+Focal Point: 
+Description: 
+tags: 
 ---
 ![[${file.path}]]
 LINK: [[${file.path}]]
