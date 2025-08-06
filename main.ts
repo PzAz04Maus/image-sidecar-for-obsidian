@@ -21,6 +21,9 @@ export default class ImageSidecarPlugin extends Plugin {
             
           const content = `---
 image: ${file.name}
+creator: 
+License: 
+Permissions:
 tags: []
 description: 
 ---

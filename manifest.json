@@ -1,7 +1,7 @@
 {
   "id": "image-sidecar-plugin",
   "name": "Image Sidecar Plugin",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "minAppVersion": "0.15.0",
   "description": "Detects when an image or pdf is added and automatically creates a sidecar file in the same directory. Scans for pdf, jpg, png, gif, webp, tiff, bmp formats",
   "author": "OpenAI backed up by Maus",
