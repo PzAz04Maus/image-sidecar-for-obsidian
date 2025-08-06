@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "Image Sidecar Plugin",
+	"version": "1.2.1",
+	"description": "Detects when an image or pdf is added and automatically creates a sidecar file in the same directory. Scans for pdf, jpg, png, gif, webp, tiff, bmp formats",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
