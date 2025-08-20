@@ -1,8 +1,30 @@
 // src/main.ts
 import { Plugin, TFile, Notice } from "obsidian";
+import { SidecarSettingsTab } from "./SidecarSettingsTab";
 
+export interface MyPluginSettings {
+  enabled: boolean;
+  optionText: string;
+  optionNumber: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const DEFAULT_SETTINGS: MyPluginSettings = {
+  enabled: true,
+  optionText: "default",
+  optionNumber: 10
+};
+
+
+//      //
+// Main //
+//      //
 export default class ImageSidecarPlugin extends Plugin {
+  settings: MyPluginSettings;
   async onload() {
+    await this.loadSettings();
+    this.addSettingTab(new SidecarSettingsTab(this.app, this));
+
     this.registerEvent(
       this.app.vault.on("create", async (file) => {
         if (!(file instanceof TFile)) return;
@@ -41,6 +63,14 @@ FILETYPE: ${file.extension.toUpperCase()}
         }
       })
     );
+  }
+
+    async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 
   onunload() {
