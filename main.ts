@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 // src/main.ts
 import { Plugin, TFile, Notice } from "obsidian";
 import { SidecarSettingsTab } from "./SidecarSettingsTab";
@@ -6,13 +7,28 @@ export interface MyPluginSettings {
   enabled: boolean;
   optionText: string;
   optionNumber: number;
+  template: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const DEFAULT_SETTINGS: MyPluginSettings = {
-  enabled: true,
+  enabled: false,
   optionText: "default",
-  optionNumber: 10
+  optionNumber: 10,
+  template: `---
+Image: \${file.name}
+Creator: 
+Source: 
+License: 
+Permissions: 
+Focal Point: 
+Description: 
+tags: 
+---
+![[\${file.path}]]
+LINK: [[\${file.path}]]
+CREATED ON: \${currDate}
+FILETYPE: \${file.extension.toUpperCase()}
+# META // \${file.name.toUpperCase()}`
 };
 
 
@@ -21,6 +37,23 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
 //      //
 export default class ImageSidecarPlugin extends Plugin {
   settings: MyPluginSettings;
+
+  
+async insertTemplate(src: TFile, sidecarFile: TFile) {
+    const currDate = new Date().toISOString().split("T")[0];
+
+  // Replace variables in template
+    let content = this.settings.template
+        .replace(/\${file.name}/g, src.name)
+        .replace(/\${file.path}/g, src.path)
+        .replace(/\${file.extension}/g, src.extension)
+        .replace(/\${currDate}/g, currDate)
+        .replace(/\${file.name.toUpperCase\(\)}/g, src.name.toUpperCase())
+        .replace(/\${file.extension.toUpperCase\(\)}/g, src.extension.toUpperCase());
+
+    await this.app.vault.modify(sidecarFile, content);
+}
+
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new SidecarSettingsTab(this.app, this));
@@ -37,29 +70,14 @@ export default class ImageSidecarPlugin extends Plugin {
 
         const sidecarPath = noExtPath + ".md";
         const exists = this.app.vault.getAbstractFileByPath(sidecarPath.toUpperCase());
-        const currDate: Date = new Date();
 
-        if (!exists) {
-            
-          const content = `---
-Image: ${file.name}
-Creator: 
-Source: 
-License: 
-Permissions: 
-Focal Point: 
-Description: 
-tags: 
----
-![[${file.path}]]
-LINK: [[${file.path}]]
-CREATED ON: ${currDate}
-FILETYPE: ${file.extension.toUpperCase()}
-# META // ${file.name.toUpperCase()}
-`;
+        if (this.settings.enabled && !exists) {
 
-          await this.app.vault.create(sidecarPath, content);
-          new Notice(`Created sidecar for ${file.name} @ ${noExtPath}`);
+            // Create file
+            const sidecarFile = await this.app.vault.create(sidecarPath, "");
+            await this.insertTemplate(file,sidecarFile);
+            //await this.app.vault.create(sidecarPath, template);
+            new Notice(`Created sidecar ${sidecarFile} @ ${noExtPath}`);
         }
       })
     );
