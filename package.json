@@ -1,12 +1,13 @@
 {
 	"name": "Image Sidecar Plugin",
-    "_comment_version": "You dont need to update this field",
+	"_comment_version": "You dont need to update this field",
 	"version": "1.4.6",
 	"description": "Detects when an image or pdf is added and automatically creates a sidecar file in the same directory. Scans for pdf, jpg, png, gif, webp, tiff, bmp formats",
 	"main": "main.js",
 	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build": "esbuild main.ts --bundle --platform=node --format=cjs --outfile=main.js --external:obsidian",
+		"release": "npm run build && shx rm -rf release && shx mkdir release && shx cp manifest.json main.js release/ && (shx test -f styles.css && shx cp styles.css release/ || shx echo 'no styles')",
+		"deploy": "npm run release && shx cp -r release/* \"$PLUGIN_DIR\"",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
@@ -19,6 +20,7 @@
 		"builtin-modules": "3.3.0",
 		"esbuild": "0.17.3",
 		"obsidian": "latest",
+		"shx": "^0.4.0",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
 	}

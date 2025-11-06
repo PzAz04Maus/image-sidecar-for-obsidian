@@ -3,17 +3,28 @@
 import { Plugin, TFile, Notice } from "obsidian";
 import { SidecarSettingsTab } from "./SidecarSettingsTab";
 
+export enum SidecarDirectoryMode {
+  Adjacent = "Adjacent",
+  Mirror = "Mirror",
+  Dump = "Dump"
+}
+
+
 export interface MyPluginSettings {
   enabled: boolean;
+  sidecarDirectoryMode: SidecarDirectoryMode;
   optionText: string;
-  optionNumber: number;
   template: string;
+  dir: string;
+  optionNumber: number;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
   enabled: false,
+  sidecarDirectoryMode: SidecarDirectoryMode.Adjacent,
   optionText: "default",
   optionNumber: 10,
+  dir: "",
   template: `---
 Image: \${file.name}
 Creator: 
@@ -37,12 +48,12 @@ FILETYPE: \${file.extension.toUpperCase()}
 //      //
 export default class ImageSidecarPlugin extends Plugin {
   settings: MyPluginSettings;
-
   
-async insertTemplate(src: TFile, sidecarFile: TFile) {
+async insertTemplate(src: TFile, sidecarFile: TFile)
+{
     const currDate = new Date().toISOString().split("T")[0];
 
-  // Replace variables in template
+    // Replace variables in template
     let content = this.settings.template
         .replace(/\${file.name}/g, src.name)
         .replace(/\${file.path}/g, src.path)
@@ -59,25 +70,39 @@ async insertTemplate(src: TFile, sidecarFile: TFile) {
     this.addSettingTab(new SidecarSettingsTab(this.app, this));
 
     this.registerEvent(
-      this.app.vault.on("create", async (file) => {
-        if (!(file instanceof TFile)) return;
+      this.app.vault.on("create", async (srcFile) => {
+        if (!(srcFile instanceof TFile)) return;
 
         const imageRegex = /\.(jpg|jpeg|png|gif|webp|tiff|bmp|pdf)$/i;
-        if (!imageRegex.test(file.name)) return;
+        if (!imageRegex.test(srcFile.name)) return;
 
-        const folder = file.path.substring(0, file.path.lastIndexOf("/"));
-        const noExtPath = `${folder}/${file.basename}`;
+        let srcFolder = srcFile.path.substring(0, srcFile.path.lastIndexOf("/"));
 
-        const sidecarPath = noExtPath + ".md";
-        const exists = this.app.vault.getAbstractFileByPath(sidecarPath.toUpperCase());
+        
 
+        const srcNoExt = `${srcFolder}/${srcFile.basename}`;
+        let destPath = srcNoExt + ".md";
+
+        switch(this.settings.sidecarDirectoryMode)
+        {
+            case SidecarDirectoryMode.Dump:
+                destPath = this.settings.dir;
+                break;
+            case SidecarDirectoryMode.Mirror:
+                destPath = this.settings.dir + "/" + destPath;
+                break;
+            case SidecarDirectoryMode.Adjacent:
+            default:
+                break;
+        }
+
+        const exists = this.app.vault.getAbstractFileByPath(destPath.toUpperCase());
+        
         if (this.settings.enabled && !exists) {
-
-            // Create file
-            const sidecarFile = await this.app.vault.create(sidecarPath, "");
-            await this.insertTemplate(file,sidecarFile);
+            const sidecarFile = await this.app.vault.create(destPath, "");
+            await this.insertTemplate(srcFile,sidecarFile);
             //await this.app.vault.create(sidecarPath, template);
-            new Notice(`Created sidecar ${sidecarFile} @ ${noExtPath}`);
+            new Notice(`Created sidecar ${sidecarFile} @ ${this.settings.dir}`);
         }
       })
     );
