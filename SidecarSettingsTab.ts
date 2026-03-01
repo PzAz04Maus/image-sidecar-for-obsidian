@@ -43,6 +43,11 @@ export class SidecarSettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  //we forgot to define our modes
+  //    should be...
+  //    Adjacent = sidecar created in the same directory as the source image
+  //    Mirror = sidecar created in a directory mirroring the source's directory structure within a specified root
+  //    Dump = sidecar created in a single flat directory, ignoring the source's directory structure
   SidecarDirectoryLabels: Record<SidecarDirectoryMode, string> = {
     Adjacent: "Adjacent Folder",
     Mirror: "Mirror Directory",
@@ -121,8 +126,8 @@ export class SidecarSettingsTab extends PluginSettingTab {
     //Accepts ImageSidecarPlugin.settings
     //returns ??
     new Setting(containerEl)
-        .setName("Target Folder")
-        .setDesc("Choose a folder in your vault")
+        .setName("Metadata Root Folder")
+        .setDesc("Choose a folder in your vault as the root for your metadata")
         .addSearch(search => {
             search.setPlaceholder("Example: MyNotes/")
             .setValue(this.plugin.settings.dir)
