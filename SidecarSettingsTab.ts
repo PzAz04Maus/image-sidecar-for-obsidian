@@ -103,6 +103,34 @@ export class SidecarSettingsTab extends PluginSettingTab {
           })
       );
 
+    new Setting(containerEl)
+      .setName("Processing budget (ms)")
+      .setDesc("How much time the plugin spends per UI tick. Higher = faster, but can feel less responsive.")
+      .addSlider(slider =>
+        slider
+          .setLimits(1, 100, 1)
+          .setValue(this.plugin.settings.budgetMs)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.budgetMs = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Max concurrency")
+      .setDesc("How many files can be processed in parallel. Higher = faster, but more load (especially on network vaults).")
+      .addSlider(slider =>
+        slider
+          .setLimits(1, 8, 1)
+          .setValue(this.plugin.settings.maxConcurrency)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.maxConcurrency = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
 
     //Accepts ImageSidecarPlugin.settings.sidecarDirectoryMode
     //Returns value: SidecarDirectoryMode

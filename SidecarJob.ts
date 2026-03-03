@@ -2,12 +2,13 @@ import { TFile } from "obsidian";
 
 export type SidecarJobStatus =
   | { state: "idle" }
-  | { state: "running"; processed: number; created: number; skipped: number; queued: number }
-  | { state: "paused"; processed: number; created: number; skipped: number; queued: number }
-  | { state: "cancelling"; processed: number; created: number; skipped: number; queued: number };
+  | { state: "running"; processed: number; created: number; skipped: number; queued: number; inFlight: number }
+  | { state: "paused"; processed: number; created: number; skipped: number; queued: number; inFlight: number }
+  | { state: "cancelling"; processed: number; created: number; skipped: number; queued: number; inFlight: number };
 
 export interface SidecarJobOptions {
   budgetMs?: number;
+  maxConcurrency?: number;
 }
 
 function nowMs(): number {
@@ -26,7 +27,8 @@ export function yieldToUI(): Promise<void> {
 
 export class SidecarJob {
   private queue: string[] = [];
-  private queuedSet = new Set<string>();
+  private scheduledSet = new Set<string>();
+  private inFlight = new Set<Promise<void>>();
 
   private running = false;
   private paused = false;
@@ -39,14 +41,28 @@ export class SidecarJob {
   private created = 0;
   private skipped = 0;
 
-  private readonly budgetMs: number;
+  private budgetMs: number;
+  private maxConcurrency: number;
 
   constructor(
     private readonly handler: (filePath: string) => Promise<"created" | "skipped">,
     private readonly onStatus?: (status: SidecarJobStatus) => void,
     options: SidecarJobOptions = {}
   ) {
-    this.budgetMs = options.budgetMs ?? 10;
+    this.budgetMs = Math.max(1, Number(options.budgetMs ?? 10) || 10);
+    this.maxConcurrency = Math.max(1, Math.floor(Number(options.maxConcurrency ?? 1) || 1));
+  }
+
+  updateOptions(options: SidecarJobOptions): void {
+    if (options.budgetMs !== undefined) {
+      const next = Math.max(1, Number(options.budgetMs) || 1);
+      this.budgetMs = next;
+    }
+    if (options.maxConcurrency !== undefined) {
+      const next = Math.max(1, Math.floor(Number(options.maxConcurrency) || 1));
+      this.maxConcurrency = next;
+    }
+    this.onStatus?.(this.getStatus());
   }
 
   getStatus(): SidecarJobStatus {
@@ -54,7 +70,8 @@ export class SidecarJob {
       processed: this.processed,
       created: this.created,
       skipped: this.skipped,
-      queued: this.queue.length
+      queued: this.queue.length,
+      inFlight: this.inFlight.size
     };
 
     if (!this.running) return { state: "idle" };
@@ -65,8 +82,8 @@ export class SidecarJob {
 
   enqueue(fileOrPath: TFile | string): void {
     const filePath = typeof fileOrPath === "string" ? fileOrPath : fileOrPath.path;
-    if (this.queuedSet.has(filePath)) return;
-    this.queuedSet.add(filePath);
+    if (this.scheduledSet.has(filePath)) return;
+    this.scheduledSet.add(filePath);
     this.queue.push(filePath);
     this.onStatus?.(this.getStatus());
   }
@@ -77,7 +94,8 @@ export class SidecarJob {
 
   clearQueue(): void {
     this.queue.length = 0;
-    this.queuedSet.clear();
+    // Only safe to clear scheduledSet when nothing is in flight.
+    if (this.inFlight.size === 0) this.scheduledSet.clear();
     this.onStatus?.(this.getStatus());
   }
 
@@ -132,37 +150,74 @@ export class SidecarJob {
 
   private async runLoop(): Promise<void> {
     try {
-      while (this.queue.length) {
+      while (this.queue.length || this.inFlight.size) {
         if (this.cancelRequested) break;
         if (this.paused) await this.waitForResumeOrCancel();
         if (this.cancelRequested) break;
 
         const tickStart = nowMs();
-        while (this.queue.length && nowMs() - tickStart < this.budgetMs) {
+        while (
+          this.queue.length &&
+          this.inFlight.size < this.maxConcurrency &&
+          nowMs() - tickStart < this.budgetMs
+        ) {
           if (this.cancelRequested) break;
           if (this.paused) break;
 
           const filePath = this.queue.shift();
           if (!filePath) break;
-          this.queuedSet.delete(filePath);
 
-          const result = await this.handler(filePath);
-          this.processed += 1;
-          if (result === "created") this.created += 1;
-          else this.skipped += 1;
+          const task = (async () => {
+            let result: "created" | "skipped" = "skipped";
+            try {
+              result = await this.handler(filePath);
+            } catch (err) {
+              console.error("Image Sidecar: job handler failed", { filePath, err });
+              result = "skipped";
+            } finally {
+              this.processed += 1;
+              if (result === "created") this.created += 1;
+              else this.skipped += 1;
+              this.scheduledSet.delete(filePath);
+            }
+          })();
+
+          const tracked = task.finally(() => {
+            this.inFlight.delete(tracked);
+          });
+
+          this.inFlight.add(tracked);
         }
 
         this.onStatus?.(this.getStatus());
-        await yieldToUI();
+
+        if (this.inFlight.size) {
+          // Either wait for one task to finish or yield a frame.
+          await Promise.race([yieldToUI(), ...this.inFlight]);
+        } else {
+          await yieldToUI();
+        }
       }
     } finally {
       const cancelled = this.cancelRequested;
+
+      // Stop starting new work; wait for in-flight operations to finish.
+      if (this.inFlight.size) {
+        try {
+          await Promise.allSettled(Array.from(this.inFlight));
+        } catch {
+          // ignore
+        }
+        this.inFlight.clear();
+      }
+
       this.running = false;
       this.paused = false;
       this.cancelRequested = false;
 
       if (cancelled) {
-        this.clearQueue();
+        this.queue.length = 0;
+        this.scheduledSet.clear();
       }
 
       this.onStatus?.(this.getStatus());

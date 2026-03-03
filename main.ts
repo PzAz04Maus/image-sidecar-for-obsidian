@@ -18,6 +18,10 @@ export interface MyPluginSettings {
   template: string;
   dir: string;
   optionNumber: number;
+
+  // Performance tuning
+  budgetMs: number;
+  maxConcurrency: number;
 }
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -26,6 +30,8 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
   optionText: "default",
   optionNumber: 10,
   dir: "",
+  budgetMs: 25,
+  maxConcurrency: 4,
   template: `---
 Image: \${file.name}
 Creator: 
@@ -148,12 +154,15 @@ async insertTemplate(src: TFile, sidecarFile: TFile)
       if (status.state === "idle") {
         text = "Sidecar: idle";
       } else if (status.state === "paused") {
-        text = `Sidecar: paused (${status.created} created, ${status.queued} queued)`;
+        const queuedTotal = status.queued + status.inFlight;
+        text = `Sidecar: paused (${status.created} created, ${queuedTotal} queued)`;
       } else if (status.state === "cancelling") {
-        text = `Sidecar: cancelling (${status.created} created, ${status.queued} queued)`;
+        const queuedTotal = status.queued + status.inFlight;
+        text = `Sidecar: cancelling (${status.created} created, ${queuedTotal} queued)`;
       } else {
         // running
-        text = `Sidecar: ${status.created} created (${status.processed}/${status.processed + status.queued})`;
+        const total = status.processed + status.queued + status.inFlight;
+        text = `Sidecar: ${status.created} created (${status.processed}/${total})`;
       }
     }
 
@@ -207,7 +216,7 @@ async insertTemplate(src: TFile, sidecarFile: TFile)
 
     const files = this.app.vault.getFiles();
     let i = 0;
-    const budgetMs = 10;
+    const budgetMs = Math.max(1, Number(this.settings.budgetMs) || 1);
 
     while (i < files.length) {
       const start = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
@@ -235,7 +244,8 @@ async insertTemplate(src: TFile, sidecarFile: TFile)
     this.updateStatusBar();
 
     this.job = new SidecarJob((filePath) => this.handleOneImageByPath(filePath), this.onJobStatus, {
-      budgetMs: 10
+      budgetMs: this.settings.budgetMs,
+      maxConcurrency: this.settings.maxConcurrency
     });
 
     this.addCommand({
@@ -293,6 +303,12 @@ async insertTemplate(src: TFile, sidecarFile: TFile)
 
   async saveSettings() {
     await this.saveData(this.settings);
+
+    // Apply performance settings immediately.
+    this.job?.updateOptions({
+      budgetMs: this.settings.budgetMs,
+      maxConcurrency: this.settings.maxConcurrency
+    });
   }
 
   onunload() {

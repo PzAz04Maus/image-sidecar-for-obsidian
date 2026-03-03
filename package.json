@@ -1,7 +1,7 @@
 {
 	"name": "Image Sidecar Plugin",
 	"_comment_version": "You dont need to update this field",
-	"version": "1.4.7-beta.0",
+	"version": "1.4.7-beta.1",
 	"description": "Detects when an image or pdf is added and automatically creates a sidecar file in the same directory. Scans for pdf, jpg, png, gif, webp, tiff, bmp formats",
 	"main": "main.js",
 	"scripts": {
